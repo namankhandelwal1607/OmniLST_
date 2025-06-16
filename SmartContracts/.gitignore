@@ -1,0 +1,41 @@
+# Node modules (Hardhat, web3, etc.)
+node_modules/
+
+# Build artifacts
+artifacts/
+cache/
+typechain/
+typechain-types/
+dist/
+
+# Hardhat/Foundry temporary files
+*.tsbuildinfo
+*.log
+*.env
+.env.*
+
+# Coverage reports
+coverage/
+lcov-report/
+*.lcov
+
+# OS and editor-specific files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Ignore test results or recordings
+test-results/
+recordings/
+
+# Compiled contracts (optional)
+*.json
+!hardhat.config.js
+!hardhat.config.ts
+
+# Foundry-specific
+out/
+lib/
+broadcast/
