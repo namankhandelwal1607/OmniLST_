@@ -1,25 +1,21 @@
+// App.jsx
 import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Header } from './components/Header';
-import { GeometricLogo } from './components/GeometricLogo';
-import { HeroSection } from './pages/HeroSection';
-import {ProcessSection} from './pages/ProcessSection';
+import Stake from './pages/Stake';
+import HomePage from './pages/HomePage';
+
 function App() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-100 via-purple-50 to-blue-100 relative overflow-hidden">
-      <Header />
-
-      <main className="flex px-8 py-12 min-h-[calc(100vh-120px)]">
-        <div className="flex-1 flex items-center justify-center">
-          <div className="animate-scaleRotate">
-            <GeometricLogo />
-          </div>
-        </div>
-
-
-        <HeroSection />
-      </main>
-      <ProcessSection />
-    </div>
+    <Router>
+      <div className="min-h-screen bg-gradient-to-br from-pink-100 via-purple-50 to-blue-100 relative overflow-hidden">
+        <Header />
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/stake" element={<Stake />} />
+        </Routes>
+      </div>
+    </Router>
   );
 }
 

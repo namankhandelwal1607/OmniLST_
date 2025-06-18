@@ -1,7 +1,10 @@
 import React from 'react';
 import { Droplet } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export const HeroSection = () => {
+  const navigate = useNavigate();
+
   return (
     <div className="flex-1 flex items-center justify-center px-8 max-w-2xl">
       <div className="text-left w-full">
@@ -27,7 +30,7 @@ export const HeroSection = () => {
           </div>
         </div>
 
-        <button className="bg-black text-white px-8 py-4 rounded-full font-semibold hover:bg-gray-800 transition-colors flex items-center space-x-2">
+        <button onClick={() => navigate('/stake')} className="bg-black text-white px-8 py-4 rounded-full font-semibold hover:bg-gray-800 transition-colors flex items-center space-x-2">
           <Droplet className="w-5 h-5" />
           <span>Stake ETH</span>
         </button>
