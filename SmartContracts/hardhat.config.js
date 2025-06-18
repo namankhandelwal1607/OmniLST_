@@ -13,7 +13,12 @@ module.exports = {
       url: `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
       accounts: [`0x${PRIVATE_KEY}`], 
       chainId: 11155111,
-    }
+    }, 
+    arbitrum: {
+      url: `https://arb-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+      accounts: [`0x${PRIVATE_KEY}`], 
+      chainId: 421614,
+    }, 
   }
 };
 
