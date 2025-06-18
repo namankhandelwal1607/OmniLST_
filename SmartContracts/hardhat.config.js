@@ -19,6 +19,11 @@ module.exports = {
       accounts: [`0x${PRIVATE_KEY}`], 
       chainId: 421614,
     }, 
+    base: {
+      url: `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+      accounts: [`0x${PRIVATE_KEY}`], 
+      chainId: 84532,
+    }, 
   }
 };
 
