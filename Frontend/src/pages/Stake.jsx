@@ -1,4 +1,3 @@
-// Stake.jsx
 import React, { useState } from 'react';
 import {
   Droplets,
@@ -7,18 +6,53 @@ import {
   Shield,
   Info
 } from 'lucide-react';
+import { ethers } from 'ethers';
 
-
-const Stake = () => {
-  const [selectedOption, setSelectedOption] = useState('A');
+const Stake = ({ state }) => {
+  const [selectedOption, setSelectedOption] = useState('Ethereum');
   const [ethAmount, setEthAmount] = useState('');
   const [isConnected, setIsConnected] = useState(false);
+  const [txPending, setTxPending] = useState(false);
 
   const options = [
     { id: 'Ethereum', label: 'Standard Staking', apr: '5.7%', description: 'Regular ETH staking with stETH rewards' },
     { id: 'Arbitrum', label: 'Boosted Staking', apr: '6.2%', description: 'Enhanced rewards with Mellow points' },
     { id: 'Base', label: 'Premium Staking', apr: '7.1%', description: 'Maximum rewards with bonus multipliers' }
   ];
+
+  const handleStake = async () => {
+    if (!state.signer || !ethAmount) return;
+
+    try {
+      setTxPending(true);
+
+      let contract;
+      if (selectedOption === 'Ethereum') {
+        contract = state.contractDepositManagerEthereum;
+      } else if (selectedOption === 'Arbitrum') {
+        contract = state.contractDepositManagerArbitrum;
+      } else if (selectedOption === 'Base') {
+        contract = state.contractDepositManagerBase;
+      }
+
+      const parsedAmount = ethers.utils.parseEther(ethAmount);
+      const exchangeRate = 1;
+
+      const tx = await contract.connect(state.signer).depositETH(exchangeRate, {
+        value: parsedAmount,
+      });
+
+      await tx.wait();
+
+      alert("ETH successfully staked!");
+      setEthAmount('');
+    } catch (err) {
+      console.error("Staking error:", err);
+      alert("Transaction failed!");
+    } finally {
+      setTxPending(false);
+    }
+  };
 
   return (
     <div className="max-w-2xl mx-auto px-4 pt-16 pb-8">
@@ -41,7 +75,7 @@ const Stake = () => {
                     : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                 }`}
               >
-              {option.id}
+                {option.id}
               </button>
             ))}
           </div>
@@ -87,14 +121,15 @@ const Stake = () => {
           </button>
         ) : (
           <button
-            disabled={!ethAmount}
+            onClick={handleStake}
+            disabled={!ethAmount || txPending}
             className={`w-full py-4 font-semibold rounded-xl transition-all duration-200 transform hover:scale-[1.02] shadow-lg ${
-              ethAmount
+              ethAmount && !txPending
                 ? 'bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white'
                 : 'bg-gray-700 text-gray-400 cursor-not-allowed'
             }`}
           >
-            {ethAmount ? 'Proceed' : 'Enter amount'}
+            {txPending ? 'Processing...' : ethAmount ? 'Proceed' : 'Enter amount'}
           </button>
         )}
 
@@ -106,9 +141,9 @@ const Stake = () => {
             </span>
           </div>
           <p className="text-gray-400 text-sm mb-3">
-            {selectedOption === 'A' && 'New way to support Lido decentralization.'}
-            {selectedOption === 'B' && 'Enhanced rewards with additional protocol benefits.'}
-            {selectedOption === 'C' && 'Premium tier with maximum earning potential.'}
+            {selectedOption === 'Ethereum' && 'New way to support Lido decentralization.'}
+            {selectedOption === 'Arbitrum' && 'Enhanced rewards with additional protocol benefits.'}
+            {selectedOption === 'Base' && 'Premium tier with maximum earning potential.'}
           </p>
           <div className="flex items-center space-x-2 text-sm">
             <div className="flex items-center space-x-1">
