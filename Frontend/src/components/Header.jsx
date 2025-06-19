@@ -5,16 +5,19 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 export const Header = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const isStakePage = location.pathname === '/stake';
 
   const [account, setAccount] = useState(null);
+  const [isStakeMode, setIsStakeMode] = useState(location.pathname === '/stake');
+
+  // Update mode when route changes
+  useEffect(() => {
+    setIsStakeMode(location.pathname === '/stake');
+  }, [location.pathname]);
 
   const connectOrDisconnectWallet = async () => {
     if (account) {
-      // Disconnect: just clear the state
-      setAccount(null);
+      setAccount(null); // Disconnect
     } else {
-      // Connect
       if (typeof window.ethereum !== 'undefined') {
         try {
           const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
@@ -28,12 +31,10 @@ export const Header = () => {
     }
   };
 
-  // Optional: auto-fill account if already connected
-  useEffect(() => {
-    if (window.ethereum && window.ethereum.selectedAddress) {
-      setAccount(window.ethereum.selectedAddress);
-    }
-  }, []);
+  const handleToggle = () => {
+    const nextPath = isStakeMode ? '/withdraw' : '/stake';
+    navigate(nextPath);
+  };
 
   return (
     <header className="w-full px-8 py-6 flex items-center justify-between">
@@ -51,13 +52,21 @@ export const Header = () => {
         <a href="#" className="text-gray-700 hover:text-black transition-colors font-medium">Learn</a>
       </nav>
 
-      {isStakePage ? (
-        <button
-          onClick={connectOrDisconnectWallet}
-          className="bg-black text-white px-6 py-3 rounded-full font-semibold hover:bg-gray-800 transition-colors"
-        >
-          {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : 'Connect Wallet'}
-        </button>
+      {location.pathname === '/stake' || location.pathname === '/withdraw' ? (
+        <div className="flex items-center space-x-4">
+          <button
+            onClick={handleToggle}
+            className="bg-black text-white px-6 py-3 rounded-full font-semibold hover:bg-gray-800 transition-colors"
+          >
+            {isStakeMode ? 'Withdraw ETH' : 'Stake ETH'}
+          </button>
+          <button
+            onClick={connectOrDisconnectWallet}
+            className="bg-black text-white px-6 py-3 rounded-full font-semibold hover:bg-gray-800 transition-colors"
+          >
+            {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : 'Connect Wallet'}
+          </button>
+        </div>
       ) : (
         <button
           onClick={() => navigate('/stake')}

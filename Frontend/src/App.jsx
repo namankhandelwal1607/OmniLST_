@@ -5,7 +5,7 @@ import { Header } from "./components/Header";
 import Stake from "./pages/Stake";
 import HomePage from "./pages/HomePage";
 import abiDepositManager from "./ABIs/DepositManager.json";
-
+import Withdraw from "./pages/Withdraw";
 function App() {
   const [state, setState] = useState({
     provider: null, // static provider map for read-only
@@ -91,6 +91,7 @@ function App() {
         <Routes>
           <Route path="/" element={<HomePage state={state} />} />
           <Route path="/stake" element={<Stake state={state} />} />
+          <Route path="/withdraw" element={<Withdraw state={state} />} />
         </Routes>
       </div>
     </Router>

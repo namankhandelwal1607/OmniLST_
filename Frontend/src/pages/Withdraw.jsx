@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Diamond, Info } from 'lucide-react';
 import { ethers } from 'ethers';
 
-const Stake = ({ state }) => {
+const Withdraw = ({ state }) => {
   const [selectedChain, setSelectedChain] = useState('Ethereum');
   const [ethAmount, setEthAmount] = useState('');
   const [isConnected, setIsConnected] = useState(false);
@@ -153,4 +153,4 @@ const Stake = ({ state }) => {
   );
 };
 
-export default Stake;
+export default Withdraw;
