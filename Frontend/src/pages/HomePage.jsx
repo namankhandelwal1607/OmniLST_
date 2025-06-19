@@ -3,8 +3,8 @@ import React from 'react';
 import { GeometricLogo } from '../components/GeometricLogo';
 import { HeroSection } from './HeroSection';
 import { ProcessSection } from './ProcessSection';
-
-const HomePage = () => {
+import ETHAnalytics from './ETHAnalytics';
+const HomePage = ({state}) => {
   return (
     <>
       <main className="flex px-8 py-12 min-h-[calc(100vh-120px)]">
@@ -13,8 +13,11 @@ const HomePage = () => {
             <GeometricLogo />
           </div>
         </div>
-        <HeroSection />
+        <HeroSection state={state} />
+
       </main>
+      <ETHAnalytics providerMap={state?.provider} />
+
       <ProcessSection />
     </>
   );

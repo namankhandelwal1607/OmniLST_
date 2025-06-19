@@ -1,18 +1,18 @@
 import React from 'react';
+import './GeometricLogo.css'; // Make sure this path is correct
 
 export const GeometricLogo = () => {
   return (
-    <div className="relative w-[480px] h-[480px] flex items-center justify-center">
+    <div className="relative w-[480px] h-[480px] flex items-center justify-center animate-unfold">
       <svg
         width="420"
         height="540"
         viewBox="0 0 280 360"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        className="absolute"
+        className="glowing-logo" // custom class with drop-shadow glow
       >
         <defs>
-          {/* Gradients unchanged */}
           <linearGradient id="topLeftGradient" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#FFB3D1" />
             <stop offset="50%" stopColor="#F8BBD9" />
@@ -41,7 +41,6 @@ export const GeometricLogo = () => {
           </linearGradient>
         </defs>
 
-        {/* Shapes unchanged */}
         <path d="M140 20 L140 180 L40 180 Z" fill="url(#topLeftGradient)" opacity="0.9" />
         <path d="M140 20 L240 180 L140 180 Z" fill="url(#topRightGradient)" opacity="0.9" />
         <path d="M40 180 L140 180 L240 180 L140 220 Z" fill="url(#middleGradient)" opacity="0.95" />
