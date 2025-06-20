@@ -38,7 +38,7 @@ contract DepositManagerEthereum is Ownable, ReentrancyGuard {
         require(success, "ETH transfer to vault failed");
 
         // Calculate and transfer oLST tokens
-        uint256 olstAmount = (_exchangeRate * msg.value) / DECIMAL;
+        uint256 olstAmount = (_exchangeRate * msg.value) ;
         olstToken.safeTransfer(msg.sender, olstAmount);
 
         emit Deposited(msg.sender, msg.value, olstAmount);
