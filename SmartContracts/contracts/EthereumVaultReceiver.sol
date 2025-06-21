@@ -33,7 +33,10 @@ contract EthereumVaultReceiver is CCIPReceiver, Ownable, ReentrancyGuard {
     IRocketPoolAdapter public rocketPoolAdapter;
     IStaderAdapter public staderAdapter;
     address tokenAddress;
-
+    IERC20 public immutable stETH;
+    IERC20 public immutable rETH;
+    IERC20 public immutable lsETH;
+    address public recipient;
     // Mapping to track allowed source chains
     mapping(uint64 => bool) public allowedSourceChains;
 
@@ -42,13 +45,6 @@ contract EthereumVaultReceiver is CCIPReceiver, Ownable, ReentrancyGuard {
 
     // Store user deposits
     mapping(address => uint256) public userDeposits;
-    mapping(address => DepositInfo) public userDepositInfo;
-
-    struct DepositInfo {
-        uint256 totalAmount;
-        uint256 timestamp;
-        bool isStaked;
-    }
 
     event MessageReceived(
         bytes32 indexed messageId,
@@ -62,6 +58,10 @@ contract EthereumVaultReceiver is CCIPReceiver, Ownable, ReentrancyGuard {
     event ETHStaked(address indexed user, uint256 amount);
     event AllowedSenderUpdated(address indexed sender, bool allowed);
     event AllowedChainUpdated(uint64 indexed chainSelector, bool allowed);
+    event RecipientUpdated(
+        address indexed oldRecipient,
+        address indexed newRecipient
+    );
 
     constructor(
         address _router,
@@ -69,7 +69,11 @@ contract EthereumVaultReceiver is CCIPReceiver, Ownable, ReentrancyGuard {
         address _owner,
         address _lidoAdapter,
         address _rocketPoolAdapter,
-        address _staderAdapter
+        address _staderAdapter,
+        address _stETH,
+        address _rETH,
+        address _lsETH,
+        address _recipient
     ) CCIPReceiver(_router) Ownable() {
         _transferOwnership(_owner);
         tokenAddress = _tokenAddress;
@@ -77,6 +81,10 @@ contract EthereumVaultReceiver is CCIPReceiver, Ownable, ReentrancyGuard {
         lidoAdapter = ILidoAdapter(_lidoAdapter);
         rocketPoolAdapter = IRocketPoolAdapter(_rocketPoolAdapter);
         staderAdapter = IStaderAdapter(_staderAdapter);
+        stETH = IERC20(_stETH);
+        rETH = IERC20(_rETH);
+        lsETH = IERC20(_lsETH);
+        recipient = _recipient;
     }
 
     function _ccipReceive(
@@ -109,9 +117,6 @@ contract EthereumVaultReceiver is CCIPReceiver, Ownable, ReentrancyGuard {
 
                 if (tokenAmount.token == tokenAddress) {
                     weth.withdraw(tokenAmount.amount);
-
-                    _updateUserDeposit(user, tokenAmount.amount);
-
                     emit ETHReceived(user, tokenAmount.amount);
                 }
             }
@@ -126,32 +131,15 @@ contract EthereumVaultReceiver is CCIPReceiver, Ownable, ReentrancyGuard {
         );
     }
 
-    function _updateUserDeposit(address user, uint256 amount) internal {
-        userDeposits[user] += amount;
-
-        userDepositInfo[user] = DepositInfo({
-            totalAmount: userDeposits[user],
-            timestamp: block.timestamp,
-            isStaked: false
-        });
-    }
-
     function stakeUserFunds(
         address user,
         uint256 lidoPercent,
         uint256 rocketPercent
-    ) external onlyOwner nonReentrant {
+    ) external nonReentrant {
         require(lidoPercent + rocketPercent <= 100, "Invalid percentages");
 
-        DepositInfo storage info = userDepositInfo[user];
-        require(!info.isStaked, "Already staked");
-
-        uint256 totalAmount = info.totalAmount;
+        uint256 totalAmount = address(this).balance;
         require(totalAmount > 0, "No ETH to stake");
-
-        // Mark as staked
-        info.isStaked = true;
-
         // Split amounts
         uint256 lidoAmount = (totalAmount * lidoPercent) / 100;
         uint256 rocketAmount = (totalAmount * rocketPercent) / 100;
@@ -172,12 +160,15 @@ contract EthereumVaultReceiver is CCIPReceiver, Ownable, ReentrancyGuard {
             staderAdapter.stakeETH{value: staderAmount}();
             emit ETHStaked(user, staderAmount);
         }
-    }
 
-    function getUserDepositInfo(
-        address user
-    ) external view returns (DepositInfo memory) {
-        return userDepositInfo[user];
+        uint256 sBal = stETH.balanceOf(address(this));
+        if (sBal > 0) stETH.safeTransfer(recipient, sBal);
+
+        uint256 rBal = rETH.balanceOf(address(this));
+        if (rBal > 0) rETH.safeTransfer(recipient, rBal);
+
+        uint256 lsBal = lsETH.balanceOf(address(this));
+        if (lsBal > 0) lsETH.safeTransfer(recipient, lsBal);
     }
 
     function getContractBalance() external view returns (uint256) {
@@ -203,6 +194,12 @@ contract EthereumVaultReceiver is CCIPReceiver, Ownable, ReentrancyGuard {
     function setAllowedSender(address sender, bool allowed) external onlyOwner {
         allowedSenders[sender] = allowed;
         emit AllowedSenderUpdated(sender, allowed);
+    }
+
+    function setRecipient(address newRecipient) external onlyOwner {
+        require(newRecipient != address(0), "Invalid recipient address");
+        emit RecipientUpdated(recipient, newRecipient);
+        recipient = newRecipient;
     }
 
     function emergencyWithdraw() external onlyOwner {
