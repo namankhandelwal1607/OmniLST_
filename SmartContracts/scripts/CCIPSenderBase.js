@@ -6,7 +6,7 @@ async function main() {
   const CCIPSender = await ethers.getContractFactory("CCIPSender");
   const cCIPSender = await CCIPSender.deploy(
     "0xD3b06cEbF099CE7DA4AcCf578aaebFDBd6e88a93", // baseSepolia Router
-    "0x1ee5E76f6286E4D88b4400FC576c43Cf8d8Ce67A", // EthereumVaultReceiver Address
+    "0x2F8C66A81de13d4DB44166F162F516937DB284aD", // EthereumVaultReceiver Address
     "16015286601757825753", // ethereumSepolia Selector
     "0x8158C9c9e66d1170BEaC5395A68F68c88E456004", // Owner
     ); 
