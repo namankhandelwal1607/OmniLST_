@@ -40,7 +40,7 @@ contract CCIPSender is Ownable {
         address _token,
         uint256 _amount,
         address _user
-    ) external onlyOwner {
+    ) external  {
         Client.EVM2AnyMessage memory evm2AnyMessage = _buildCCIPMessage(
             _receiver,
             _token,
