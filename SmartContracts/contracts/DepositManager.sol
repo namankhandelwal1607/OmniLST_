@@ -71,7 +71,7 @@ contract DepositManager is Ownable, ReentrancyGuard {
             msg.sender
         );
 
-        uint256 omniTokenToTransfer = (msg.value * _exchangeRate * 100) ;
+        uint256 omniTokenToTransfer = (msg.value * _exchangeRate ) ;
         Omnitoken.safeTransfer(msg.sender, omniTokenToTransfer);
 
 

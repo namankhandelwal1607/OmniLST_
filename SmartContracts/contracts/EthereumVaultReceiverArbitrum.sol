@@ -26,7 +26,7 @@ interface IStaderAdapter {
     function stakeETH() external payable;
 }
 
-contract EthereumVaultReceiver is CCIPReceiver, Ownable, ReentrancyGuard {
+contract EthereumVaultReceiverArbitrum is CCIPReceiver, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     IWETH public immutable weth;
     ILidoAdapter public lidoAdapter;

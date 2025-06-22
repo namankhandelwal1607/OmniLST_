@@ -7,8 +7,8 @@ async function main() {
   const depositManager = await DepositManager.deploy(
     "0xD3b06cEbF099CE7DA4AcCf578aaebFDBd6e88a93", // BaseRouter
     "0x9f650e247f428298fdff482a5c3287a2e1c38112", // Weth
-    "0xEbF74b2aA5C01A7B3A7052C874697ce631fD9C00", // BaseCCIP
-    "0x2F8C66A81de13d4DB44166F162F516937DB284aD", // EthereumVaultController
+    "0xa816Fd4ebB0e5a1B1241000acF14C53CBBbc4c87", // BaseCCIP
+    "0x4d3BDE85c4c5860F37BEeB80C698E9C4414e2Df4", // EthereumVaultController
     "0x8158C9c9e66d1170BEaC5395A68F68c88E456004", // owner
     "0x1519660a238ab32170bf937a94ac5c46a946fa26", // omnitoken
     ); 
