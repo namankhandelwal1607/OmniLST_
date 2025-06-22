@@ -1,30 +1,50 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
-
-interface IoLST {
-    function exchangeRate() external view returns (uint256);
-    function burnFrom(address account, uint256 amount) external;
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+interface ICCIPWithdrawalSender {
+    function sendETHToEthereum(address user) external payable;
 }
 
 interface IMockLsETH {
     function balanceOf(address account) external view returns (uint256);
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) external returns (bool);
     function approve(address spender, uint256 amount) external returns (bool);
-    function allowance(address owner, address spender) external view returns (uint256);
+    function allowance(
+        address owner,
+        address spender
+    ) external view returns (uint256);
 }
 
 interface IMockRETH {
     function balanceOf(address account) external view returns (uint256);
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) external returns (bool);
     function approve(address spender, uint256 amount) external returns (bool);
-    function allowance(address owner, address spender) external view returns (uint256);
+    function allowance(
+        address owner,
+        address spender
+    ) external view returns (uint256);
 }
 
 interface IMockStETH {
     function balanceOf(address account) external view returns (uint256);
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) external returns (bool);
     function approve(address spender, uint256 amount) external returns (bool);
-    function allowance(address owner, address spender) external view returns (uint256);
+    function allowance(
+        address owner,
+        address spender
+    ) external view returns (uint256);
 }
 
 interface IMockStader {
@@ -45,70 +65,81 @@ interface IMockRocketPool {
     function getRETHAddress() external view returns (address);
 }
 
-contract WithdrawalManager {
-    IoLST public oLSTToken;
+contract WithdrawalManager is ReentrancyGuard {
     IMockStader public stader;
     IMockLsETH public lsETH;
     IMockLido public lido;
     IMockStETH public stETH;
     IMockRocketPool public rocketPool;
     IMockRETH public rETH;
+    ICCIPWithdrawalSender public ccipSender;
 
     constructor(
-        address _oLSTToken,
         address _stader,
         address _rocketPool,
-        address _lido
+        address _lido,
+        address _ccipSender
     ) {
-        oLSTToken = IoLST(_oLSTToken);
         stader = IMockStader(_stader);
         lsETH = IMockLsETH(stader.getLsETHAddress());
         rocketPool = IMockRocketPool(_rocketPool);
         rETH = IMockRETH(rocketPool.getRETHAddress());
         lido = IMockLido(_lido);
         stETH = IMockStETH(lido.getStETHAddress());
+        ccipSender = ICCIPWithdrawalSender(_ccipSender); 
+
     }
 
-    function withdrawETH(uint256 oLSTAmount, uint256 A, uint256 B) external {
+    function withdrawETH(
+        uint256 oLSTAmount,
+        uint256 A, // basis‑points for Lido
+        uint256 B, // basis‑points for Rocket Pool
+        uint256 rate, // oLST → ETH exchange rate (18 decimals)
+        address sendToEthereum // receiver on Ethereum L1
+    ) external nonReentrant returns (address user, uint256 amountETH) {
         require(oLSTAmount > 0, "Amount must be > 0");
-        require(A + B <= 100_000, "Invalid percentages");
+        require(A + B <= 100_000, "Invalid percentages"); // 100 000 = 100.000%
 
-        oLSTToken.burnFrom(msg.sender, oLSTAmount);
+        // 1. Burn the caller’s oLST
 
-        uint256 rate = oLSTToken.exchangeRate();
-        uint256 totalETH = (oLSTAmount * rate) / 1e18;
+        // 2. Calculate how much ETH we owe
+        uint256 totalETH = (oLSTAmount * rate)/1e18;
+        uint256 part1 = (totalETH * A) / 100_000; // from stETH/Lido
+        uint256 part2 = (totalETH * B) / 100_000; // from rETH/Rocket
+        uint256 part3 = totalETH - part1 - part2; // from lsETH/Stader
 
-        uint256 part1 = (totalETH * A) / 100_000; // Lido
-        uint256 part2 = (totalETH * B) / 100_000; // RocketPool
-        uint256 part3 = totalETH - part1 - part2; // Stader
-
+        // 3. Redeem from the contract’s own LST balances
         if (part1 > 0) {
-            require(stETH.balanceOf(msg.sender) >= part1, "Insufficient stETH");
-            require(stETH.allowance(msg.sender, address(this)) >= part1, "stETH allowance too low");
-            require(stETH.transferFrom(msg.sender, address(this), part1), "stETH transfer failed");
-            require(stETH.approve(address(lido), part1), "stETH approve failed");
+            require(
+                stETH.balanceOf(address(this)) >= part1,
+                "Vault: stETH shortfall"
+            );
+            stETH.approve(address(lido), part1);
             lido.redeem(part1);
         }
 
         if (part2 > 0) {
-            require(rETH.balanceOf(msg.sender) >= part2, "Insufficient rETH");
-            require(rETH.allowance(msg.sender, address(this)) >= part2, "rETH allowance too low");
-            require(rETH.transferFrom(msg.sender, address(this), part2), "rETH transfer failed");
-            require(rETH.approve(address(rocketPool), part2), "rETH approve failed");
+            require(
+                rETH.balanceOf(address(this)) >= part2,
+                "Vault: rETH shortfall"
+            );
+            rETH.approve(address(rocketPool), part2);
             rocketPool.redeem(part2);
         }
 
         if (part3 > 0) {
-            require(lsETH.balanceOf(msg.sender) >= part3, "Insufficient lsETH");
-            require(lsETH.allowance(msg.sender, address(this)) >= part3, "lsETH allowance too low");
-            require(lsETH.transferFrom(msg.sender, address(this), part3), "lsETH transfer failed");
-            require(lsETH.approve(address(stader), part3), "lsETH approve failed");
+            require(
+                lsETH.balanceOf(address(this)) >= part3,
+                "Vault: lsETH shortfall"
+            );
+            lsETH.approve(address(stader), part3);
             stader.redeem(part3);
         }
 
-        uint256 totalReturned = part1 + part2 + part3;
-        (bool sent, ) = payable(msg.sender).call{value: totalReturned}("");
-        require(sent, "ETH transfer failed");
+        uint256 total = part1 + part2 + part3;
+        require(address(this).balance >= total, "Insufficient ETH to send");
+        ccipSender.sendETHToEthereum{value: total}(sendToEthereum);
+        return (msg.sender, total);
     }
 
     receive() external payable {}
