@@ -1,150 +1,117 @@
-import React, { useState } from 'react';
-import { Diamond, Info } from 'lucide-react';
-import { ethers } from 'ethers';
+import React, { useState } from "react";
+import { ethers } from "ethers";
+import abiWithdrawalManager from "../ABIs/WithdrawalManager.json";
+import abiForwarder from "../ABIs/Forwarder.json";
 
 const Withdraw = ({ state }) => {
-  const [selectedChain, setSelectedChain] = useState('Ethereum');
-  const [ethAmount, setEthAmount] = useState('');
-  const [isConnected, setIsConnected] = useState(false);
+  const [olstAmount, setOlstAmount] = useState("");
   const [txPending, setTxPending] = useState(false);
+  const [withdrawResult, setWithdrawResult] = useState(null);
 
-  const chainOptions = [
-    { id: 'Ethereum', label: 'Stake via Lido (stETH)', apr: '4.2%' },
-    { id: 'Arbitrum', label: 'Stake via Rocket Pool (rETH)', apr: '3.8%' },
-    { id: 'Base', label: 'Stake via Stader (LsETH)', apr: '4.5%' },
-  ];
-
-  const handleStake = async () => {
-    if (!state.signer || !ethAmount) return;
+  const handleWithdraw = async () => {
+    if (!state.signer || !olstAmount) return;
 
     try {
       setTxPending(true);
+      setWithdrawResult(null);
+      const parsedAmount = ethers.utils.parseEther(olstAmount);
 
-      let contract;
-      if (selectedChain === 'Ethereum') contract = state.contractDepositManagerEthereum;
-      if (selectedChain === 'Arbitrum') contract = state.contractDepositManagerArbitrum;
-      if (selectedChain === 'Base') contract = state.contractDepositManagerBase;
+      // ✅ Get original user address from MetaMask (Arbitrum)
+      const userAddress = await state.signer.getAddress();
+      console.log("🔑 User initiating withdrawal:", userAddress);
 
-      const parsedAmount = ethers.utils.parseEther(ethAmount);
-      const tx = await contract.connect(state.signer).depositETH(1, { value: parsedAmount });
+      // ✅ Step 1: Burn oLST on Arbitrum
+      console.log("🔥 Burning oLST on Arbitrum...");
+      const tx1 = await state.contractOLstBurn.connect(state.signer).withdrawETH(parsedAmount);
+      await tx1.wait();
+      console.log("✅ Burn transaction confirmed on Arbitrum");
 
-      await tx.wait();
-      alert("Staking successful!");
-      setEthAmount('');
+      // ✅ Delay before Sepolia interaction
+      await new Promise((r) => setTimeout(r, 500));
+
+      // ✅ Use private key to interact on Sepolia
+      const PRIVATE_KEY = import.meta.env.VITE_PRIVATE_KEY;
+      const ALCHEMY_KEY = import.meta.env.VITE_ALCHEMY_API_KEY;
+      const sepoliaRpc = `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
+      const sepProvider = new ethers.providers.JsonRpcProvider(sepoliaRpc);
+      const wallet = new ethers.Wallet(PRIVATE_KEY, sepProvider);
+      console.log("🛠 Sepolia wallet executing txs:", await wallet.getAddress());
+
+      // ✅ Withdraw ETH to Forwarder on Sepolia
+      const contractWithdrawalManager = new ethers.Contract(
+        state.contractWithdrawalManager.address,
+        abiWithdrawalManager.abi,
+        wallet
+      );
+
+      const tx2 = await contractWithdrawalManager.withdrawETH(
+        parsedAmount,
+        40000, // % Lido
+        30000, // % Rocket Pool
+        ethers.utils.parseEther("1"), // rate (1 oLST = 1 ETH)
+        import.meta.env.VITE_Forwarder // Forwarder address
+      );
+      await tx2.wait();
+      console.log("✅ ETH withdrawal completed, sent to Forwarder");
+
+      // ✅ Forward ETH using original burner's address
+      const contractForwarder = new ethers.Contract(
+        import.meta.env.VITE_Forwarder,
+        abiForwarder.abi,
+        wallet
+      );
+
+      const tx3 = await contractForwarder.forward(userAddress);
+      await tx3.wait();
+      console.log("✅ Forwarder sent ETH via CCIP to:", userAddress);
+
+      setWithdrawResult({
+        user: userAddress,
+        amount: ethers.utils.formatEther(parsedAmount),
+      });
     } catch (err) {
-      console.error("Staking error:", err);
-      alert("Transaction failed!");
+      console.error("Withdraw error:", err);
+      alert("Withdraw failed: " + (err.reason || err.message));
     } finally {
       setTxPending(false);
     }
   };
 
-  // oLST calculation based on exchange rate (1:1 here)
-  const olstAmount =
-    ethAmount && parseFloat(ethAmount) > 0
-      ? parseFloat(ethAmount).toFixed(6)
-      : '0.0';
-
   return (
-    <div className="max-w-2xl mx-auto px-4 pt-16 pb-8">
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold text-black mb-2">Stake ETH for oLST</h1>
-        <p className="text-gray-400 text-lg">
-          Deposit ETH to mint oLST backed by stETH, rETH, or LsETH across chains.
-        </p>
-      </div>
+    <div className="max-w-xl mx-auto px-4 pt-16 pb-8">
+      <h1 className="text-3xl font-bold mb-4 text-center">Withdraw ETH (Burn oLST)</h1>
 
-      <div className="bg-gray-900 rounded-2xl p-6 border border-gray-700 shadow-lg">
-        <label className="block text-sm font-medium text-gray-300 mb-3">Select Network</label>
-        <div className="grid grid-cols-3 gap-2 bg-gray-800 rounded-xl p-1 mb-6">
-          {chainOptions.map((option) => (
-            <button
-              key={option.id}
-              onClick={() => setSelectedChain(option.id)}
-              className={`px-4 py-3 rounded-lg text-sm font-medium transition ${
-                selectedChain === option.id
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-700'
-              }`}
-            >
-              {option.id}
-            </button>
-          ))}
-        </div>
-
-        <div className="mb-6">
-          <div className="text-white font-medium mb-1">
-            {chainOptions.find(c => c.id === selectedChain)?.label}
-          </div>
-          <div className="text-sm text-gray-400">
-            APR: {chainOptions.find(c => c.id === selectedChain)?.apr}
-          </div>
-        </div>
-
-        <div className="mb-6 relative">
-          <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
-            <Diamond className="h-5 w-5 text-gray-400" />
-            <span className="text-gray-300 font-medium">ETH</span>
-          </div>
+      <div className="bg-gray-900 p-6 rounded-xl shadow border border-gray-700 space-y-6">
+        <div>
+          <label className="text-sm text-gray-300 mb-2 block">Enter oLST Amount</label>
           <input
             type="number"
-            value={ethAmount}
-            onChange={(e) => setEthAmount(e.target.value)}
             placeholder="0.0"
-            className="w-full pl-20 pr-20 py-4 bg-gray-800 border border-gray-700 rounded-xl text-white text-lg placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+            value={olstAmount}
+            onChange={(e) => setOlstAmount(e.target.value)}
+            className="w-full px-4 py-3 bg-gray-800 text-white rounded-lg focus:outline-none border border-gray-600 focus:border-blue-500"
           />
-          <button
-            onClick={() => setEthAmount('')}
-            className="absolute right-4 top-1/2 transform -translate-y-1/2 px-3 py-1 bg-blue-500/20 text-blue-400 text-sm font-medium rounded-md hover:bg-blue-500/30 transition"
-          >
-            MAX
-          </button>
-
-          {/* Live oLST Preview */}
-          {ethAmount && parseFloat(ethAmount) > 0 && (
-            <div className="text-sm text-gray-400 mt-2 pl-1">
-              You will receive: <span className="text-white font-medium">{olstAmount} oLST</span>
-            </div>
-          )}
         </div>
 
-        {!isConnected ? (
-          <button
-            onClick={() => setIsConnected(true)}
-            className="w-full py-4 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition"
-          >
-            Connect Wallet
-          </button>
-        ) : (
-          <button
-            onClick={handleStake}
-            disabled={!ethAmount || txPending}
-            className={`w-full py-4 font-semibold rounded-xl transition ${
-              ethAmount && !txPending
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-gray-700 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            {txPending ? 'Processing...' : 'Stake ETH'}
-          </button>
-        )}
+        <button
+          onClick={handleWithdraw}
+          disabled={!olstAmount || txPending}
+          className={`w-full py-3 rounded-lg font-semibold transition ${
+            olstAmount && !txPending
+              ? "bg-blue-600 text-white hover:bg-blue-700"
+              : "bg-gray-700 text-gray-400 cursor-not-allowed"
+          }`}
+        >
+          {txPending ? "Processing..." : "Withdraw ETH"}
+        </button>
 
-        {isConnected && ethAmount && (
-          <div className="mt-6 space-y-3 text-sm text-gray-300">
-            <div className="flex justify-between">
-              <span>Exchange rate</span>
-              <span>1 ETH = 1 oLST</span>
+        {withdrawResult && (
+          <div className="mt-4 text-sm text-gray-300 border-t border-gray-700 pt-4 space-y-2">
+            <div>
+              <span className="font-medium text-white">User:</span> {withdrawResult.user}
             </div>
-            <div className="flex justify-between">
-              <span>Estimated APR</span>
-              <span>{chainOptions.find(c => c.id === selectedChain)?.apr}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="flex items-center space-x-1">
-                <span>Platform fee</span>
-                <Info className="h-4 w-4 text-gray-500" />
-              </span>
-              <span>0.5%</span>
+            <div>
+              <span className="font-medium text-white">ETH Redeemed:</span> {withdrawResult.amount} ETH
             </div>
           </div>
         )}

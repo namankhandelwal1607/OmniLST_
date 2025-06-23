@@ -6,6 +6,10 @@ import Stake from "./pages/Stake";
 import HomePage from "./pages/HomePage";
 import abiDepositManager from "./ABIs/DepositManager.json";
 import Withdraw from "./pages/Withdraw";
+import abiWithdrawalManager from "./ABIs/WithdrawalManager.json";
+import abiOlstBurnArbitrum from "./ABIs/OLstBurn.json";
+import abiForwarder from "./ABIs/Forwarder.json";
+
 function App() {
   const [state, setState] = useState({
     provider: null, // static provider map for read-only
@@ -13,6 +17,9 @@ function App() {
     contractDepositManagerEthereum: null,
     contractDepositManagerArbitrum: null,
     contractDepositManagerBase: null,
+    contractOLstBurn: null,
+    contractWithdrawalManager: null,
+    contractForwarder: null
   });
 
   const [account, setAccount] = useState(null);
@@ -54,6 +61,21 @@ function App() {
             abiDepositManager.abi,
             signer
           );
+          const contractOLstBurn= new ethers.Contract(
+            import.meta.env.VITE_OLstBurnArbitrum,
+            abiOlstBurnArbitrum.abi,
+            signer
+          );
+          const contractWithdrawalManager = new ethers.Contract(
+            import.meta.env.VITE_WithdrawalManager,
+            abiWithdrawalManager.abi,
+            signer
+          );
+          const contractForwarder = new ethers.Contract(
+            import.meta.env.VITE_Forwarder,
+            abiForwarder.abi,
+            signer
+          );
 
           // ✅ Store everything in global state
           setState({
@@ -62,6 +84,9 @@ function App() {
             contractDepositManagerEthereum,
             contractDepositManagerArbitrum,
             contractDepositManagerBase,
+            contractOLstBurn,
+            contractWithdrawalManager,
+            contractForwarder
           });
 
           setAccount(accounts[0]);
