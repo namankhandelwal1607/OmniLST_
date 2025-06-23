@@ -7,7 +7,7 @@ import HomePage from "./pages/HomePage";
 import abiDepositManager from "./ABIs/DepositManager.json";
 import Withdraw from "./pages/Withdraw";
 import abiWithdrawalManager from "./ABIs/WithdrawalManager.json";
-import abiOlstBurnArbitrum from "./ABIs/OLstBurn.json";
+import abiOlstBurn from "./ABIs/OLstBurn.json";
 import abiForwarder from "./ABIs/Forwarder.json";
 
 function App() {
@@ -17,9 +17,11 @@ function App() {
     contractDepositManagerEthereum: null,
     contractDepositManagerArbitrum: null,
     contractDepositManagerBase: null,
-    contractOLstBurn: null,
+    contractOLstBurnArbitrum: null,
     contractWithdrawalManager: null,
-    contractForwarder: null
+    contractForwarder: null,
+    contractOLstBurnEthereum: null,
+    contractOLstBurnBase: null,
   });
 
   const [account, setAccount] = useState(null);
@@ -61,9 +63,9 @@ function App() {
             abiDepositManager.abi,
             signer
           );
-          const contractOLstBurn= new ethers.Contract(
+          const contractOLstBurnArbitrum = new ethers.Contract(
             import.meta.env.VITE_OLstBurnArbitrum,
-            abiOlstBurnArbitrum.abi,
+            abiOlstBurn.abi,
             signer
           );
           const contractWithdrawalManager = new ethers.Contract(
@@ -77,6 +79,18 @@ function App() {
             signer
           );
 
+          const contractOLstBurnEthereum = new ethers.Contract(
+            import.meta.env.VITE_OLstBurnEthereum,
+            abiOlstBurn.abi,
+            signer
+          );
+
+          const contractOLstBurnBase = new ethers.Contract(
+            import.meta.env.VITE_OLstBurnBase,
+            abiOlstBurn.abi,
+            signer
+          );
+
           // ✅ Store everything in global state
           setState({
             provider: staticProviders,
@@ -84,9 +98,11 @@ function App() {
             contractDepositManagerEthereum,
             contractDepositManagerArbitrum,
             contractDepositManagerBase,
-            contractOLstBurn,
+            contractOLstBurnArbitrum,
             contractWithdrawalManager,
-            contractForwarder
+            contractForwarder,
+            contractOLstBurnEthereum,
+            contractOLstBurnBase
           });
 
           setAccount(accounts[0]);

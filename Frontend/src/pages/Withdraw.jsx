@@ -1,12 +1,134 @@
 import React, { useState } from "react";
+import { Diamond } from "lucide-react";
 import { ethers } from "ethers";
 import abiWithdrawalManager from "../ABIs/WithdrawalManager.json";
 import abiForwarder from "../ABIs/Forwarder.json";
 
 const Withdraw = ({ state }) => {
+  const [selectedChain, setSelectedChain] = useState("Ethereum");
   const [olstAmount, setOlstAmount] = useState("");
   const [txPending, setTxPending] = useState(false);
   const [withdrawResult, setWithdrawResult] = useState(null);
+
+  const withdrawEthEthereum = async (parsedAmount, userAddress) => {
+    console.log("🔥 Burning oLST on Ethereum..");
+    console.log(parsedAmount);
+    const tx1 = await state.contractOLstBurnEthereum.connect(state.signer).withdrawETH(parsedAmount);
+    await tx1.wait();
+    console.log("✅ Burn transaction confirmed on Ethereum");
+
+    await new Promise((r) => setTimeout(r, 500));
+
+    const PRIVATE_KEY = import.meta.env.VITE_PRIVATE_KEY;
+    const ALCHEMY_KEY = import.meta.env.VITE_ALCHEMY_API_KEY;
+    const sepoliaRpc = `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
+    const sepProvider = new ethers.providers.JsonRpcProvider(sepoliaRpc);
+    const wallet = new ethers.Wallet(PRIVATE_KEY, sepProvider);
+    console.log("🛠 Sepolia wallet executing txs:", await wallet.getAddress());
+
+    const contractWithdrawalManager = new ethers.Contract(
+      state.contractWithdrawalManager.address,
+      abiWithdrawalManager.abi,
+      wallet
+    );
+    const tx2 = await contractWithdrawalManager.withdrawETH(
+      parsedAmount,
+      40000,
+      30000,
+      ethers.utils.parseEther("1"),
+      import.meta.env.VITE_Forwarder
+    );
+    await tx2.wait();
+    console.log("✅ ETH withdrawal completed to Forwarder");
+
+    const contractForwarder = new ethers.Contract(
+      import.meta.env.VITE_Forwarder,
+      abiForwarder.abi,
+      wallet
+    );
+    const tx3 = await contractForwarder.forwarderEth(userAddress);
+    await tx3.wait();
+    console.log("✅ Forwarded ETH to:", userAddress);
+  };
+
+  const withdrawEthArbitrum = async (parsedAmount, userAddress) => {
+    console.log("🔥 Burning oLST on Arbitrum...");
+      console.log(parsedAmount.toString());
+    const tx1 = await state.contractOLstBurnArbitrum.connect(state.signer).withdrawETH(parsedAmount);
+    await tx1.wait();
+    console.log("✅ Burn transaction confirmed on Arbitrum");
+
+    await new Promise((r) => setTimeout(r, 500));
+
+    const PRIVATE_KEY = import.meta.env.VITE_PRIVATE_KEY;
+    const ALCHEMY_KEY = import.meta.env.VITE_ALCHEMY_API_KEY;
+    const sepoliaRpc = `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
+    const sepProvider = new ethers.providers.JsonRpcProvider(sepoliaRpc);
+    const wallet = new ethers.Wallet(PRIVATE_KEY, sepProvider);
+    console.log("🛠 Sepolia wallet executing txs:", await wallet.getAddress());
+
+    const contractWithdrawalManager = new ethers.Contract(
+      state.contractWithdrawalManager.address,
+      abiWithdrawalManager.abi,
+      wallet
+    );
+    const tx2 = await contractWithdrawalManager.withdrawETH(
+      parsedAmount,
+      40000,
+      30000,
+      ethers.utils.parseEther("1"),
+      import.meta.env.VITE_Forwarder
+    );
+    await tx2.wait();
+    console.log("✅ ETH withdrawal completed to Forwarder");
+
+    const contractForwarder = new ethers.Contract(
+      import.meta.env.VITE_Forwarder,
+      abiForwarder.abi,
+      wallet
+    );
+    const tx3 = await contractForwarder.forward(userAddress);
+    await tx3.wait();
+    console.log("✅ Forwarded ETH via CCIP to:", userAddress);
+  };
+
+  const withdrawEthBase = async (parsedAmount, userAddress) => {
+    try {
+      console.log("🔥 Burning oLST on Base...");
+      const tx1 = await state.contractOLstBurnBase.connect(state.signer).withdrawETH(parsedAmount);
+      await tx1.wait();
+      console.log("✅ Burn transaction confirmed on Base");
+
+      await new Promise((r) => setTimeout(r, 500));
+
+      const PRIVATE_KEY = import.meta.env.VITE_PRIVATE_KEY;
+      const ALCHEMY_KEY = import.meta.env.VITE_ALCHEMY_API_KEY;
+      const sepoliaRpc = `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
+      const sepProvider = new ethers.providers.JsonRpcProvider(sepoliaRpc);
+      const wallet = new ethers.Wallet(PRIVATE_KEY, sepProvider);
+
+      console.log("🛠 Sepolia wallet executing txs:", await wallet.getAddress());
+
+      const BASE_PAYOUT = import.meta.env.VITE_BASE_PAYOUT;
+
+      // ABI for the BasePayoutVault
+      const basePayoutAbi = [
+        "function payout(address recipient, uint256 amount) external",
+      ];
+
+      const basePayoutContract = new ethers.Contract(BASE_PAYOUT, basePayoutAbi, wallet);
+
+      console.log(`🚀 Sending ${ethers.utils.formatEther(parsedAmount)} ETH to ${userAddress} from BasePayoutVault...`);
+
+      const tx2 = await basePayoutContract.payout(userAddress, parsedAmount);
+      await tx2.wait();
+
+      console.log("✅ ETH transferred successfully to user!");
+    } catch (error) {
+      console.error("❌ Error in withdrawEthBase:", error);
+    }
+  };
+
 
   const handleWithdraw = async () => {
     if (!state.signer || !olstAmount) return;
@@ -14,56 +136,19 @@ const Withdraw = ({ state }) => {
     try {
       setTxPending(true);
       setWithdrawResult(null);
-      const parsedAmount = ethers.utils.parseEther(olstAmount);
 
-      // ✅ Get original user address from MetaMask (Arbitrum)
+      const parsedAmount = ethers.utils.parseEther(olstAmount);
+      console.log("Parsed amount ", ethers.utils.formatEther(parsedAmount));
       const userAddress = await state.signer.getAddress();
       console.log("🔑 User initiating withdrawal:", userAddress);
 
-      // ✅ Step 1: Burn oLST on Arbitrum
-      console.log("🔥 Burning oLST on Arbitrum...");
-      const tx1 = await state.contractOLstBurn.connect(state.signer).withdrawETH(parsedAmount);
-      await tx1.wait();
-      console.log("✅ Burn transaction confirmed on Arbitrum");
-
-      // ✅ Delay before Sepolia interaction
-      await new Promise((r) => setTimeout(r, 500));
-
-      // ✅ Use private key to interact on Sepolia
-      const PRIVATE_KEY = import.meta.env.VITE_PRIVATE_KEY;
-      const ALCHEMY_KEY = import.meta.env.VITE_ALCHEMY_API_KEY;
-      const sepoliaRpc = `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
-      const sepProvider = new ethers.providers.JsonRpcProvider(sepoliaRpc);
-      const wallet = new ethers.Wallet(PRIVATE_KEY, sepProvider);
-      console.log("🛠 Sepolia wallet executing txs:", await wallet.getAddress());
-
-      // ✅ Withdraw ETH to Forwarder on Sepolia
-      const contractWithdrawalManager = new ethers.Contract(
-        state.contractWithdrawalManager.address,
-        abiWithdrawalManager.abi,
-        wallet
-      );
-
-      const tx2 = await contractWithdrawalManager.withdrawETH(
-        parsedAmount,
-        40000, // % Lido
-        30000, // % Rocket Pool
-        ethers.utils.parseEther("1"), // rate (1 oLST = 1 ETH)
-        import.meta.env.VITE_Forwarder // Forwarder address
-      );
-      await tx2.wait();
-      console.log("✅ ETH withdrawal completed, sent to Forwarder");
-
-      // ✅ Forward ETH using original burner's address
-      const contractForwarder = new ethers.Contract(
-        import.meta.env.VITE_Forwarder,
-        abiForwarder.abi,
-        wallet
-      );
-
-      const tx3 = await contractForwarder.forward(userAddress);
-      await tx3.wait();
-      console.log("✅ Forwarder sent ETH via CCIP to:", userAddress);
+      if (selectedChain === "Ethereum") {
+        await withdrawEthEthereum(parsedAmount, userAddress);
+      } else if (selectedChain === "Arbitrum") {
+        await withdrawEthArbitrum(parsedAmount, userAddress);
+      } else if (selectedChain === "Base") {
+        await withdrawEthBase(parsedAmount, userAddress);
+      }
 
       setWithdrawResult({
         user: userAddress,
@@ -77,41 +162,83 @@ const Withdraw = ({ state }) => {
     }
   };
 
-  return (
-    <div className="max-w-xl mx-auto px-4 pt-16 pb-8">
-      <h1 className="text-3xl font-bold mb-4 text-center">Withdraw ETH (Burn oLST)</h1>
+  const chainOptions = [
+    { id: "Ethereum", label: "Redeem from Lido (stETH)" },
+    { id: "Arbitrum", label: "Redeem from Rocket Pool (rETH)" },
+    { id: "Base", label: "Redeem from Stader (LsETH)" },
+  ];
 
-      <div className="bg-gray-900 p-6 rounded-xl shadow border border-gray-700 space-y-6">
-        <div>
-          <label className="text-sm text-gray-300 mb-2 block">Enter oLST Amount</label>
+  return (
+    <div className="max-w-2xl mx-auto px-4 pt-16 pb-8">
+      <div className="text-center mb-8">
+        <h1 className="text-4xl font-bold text-white mb-2">Redeem oLST for ETH</h1>
+        <p className="text-gray-400 text-lg">
+          Burn oLST and receive ETH on the original chain.
+        </p>
+      </div>
+
+      <div className="bg-gray-900 rounded-2xl p-6 border border-gray-700 shadow-lg">
+        <label className="block text-sm font-medium text-gray-300 mb-3">Select Network</label>
+        <div className="grid grid-cols-3 gap-2 bg-gray-800 rounded-xl p-1 mb-6">
+          {chainOptions.map((option) => (
+            <button
+              key={option.id}
+              onClick={() => setSelectedChain(option.id)}
+              className={`px-4 py-3 rounded-lg text-sm font-medium transition ${selectedChain === option.id
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-400 hover:text-white hover:bg-gray-700"
+                }`}
+            >
+              {option.id}
+            </button>
+          ))}
+        </div>
+
+        <div className="mb-6">
+          <div className="text-white font-medium mb-1">
+            {chainOptions.find((c) => c.id === selectedChain)?.label}
+          </div>
+        </div>
+
+        <div className="mb-6 relative">
+          <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
+            <Diamond className="h-5 w-5 text-gray-400" />
+            <span className="text-gray-300 font-medium">oLST</span>
+          </div>
           <input
             type="number"
-            placeholder="0.0"
             value={olstAmount}
             onChange={(e) => setOlstAmount(e.target.value)}
-            className="w-full px-4 py-3 bg-gray-800 text-white rounded-lg focus:outline-none border border-gray-600 focus:border-blue-500"
+            placeholder="0.0"
+            className="w-full pl-20 pr-20 py-4 bg-gray-800 border border-gray-700 rounded-xl text-white text-lg placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
           />
+          <button
+            onClick={() => setOlstAmount("")}
+            className="absolute right-4 top-1/2 transform -translate-y-1/2 px-3 py-1 bg-blue-500/20 text-blue-400 text-sm font-medium rounded-md hover:bg-blue-500/30 transition"
+          >
+            MAX
+          </button>
         </div>
 
         <button
           onClick={handleWithdraw}
           disabled={!olstAmount || txPending}
-          className={`w-full py-3 rounded-lg font-semibold transition ${
-            olstAmount && !txPending
+          className={`w-full py-4 font-semibold rounded-xl transition ${olstAmount && !txPending
               ? "bg-blue-600 text-white hover:bg-blue-700"
               : "bg-gray-700 text-gray-400 cursor-not-allowed"
-          }`}
+            }`}
         >
           {txPending ? "Processing..." : "Withdraw ETH"}
         </button>
 
         {withdrawResult && (
-          <div className="mt-4 text-sm text-gray-300 border-t border-gray-700 pt-4 space-y-2">
+          <div className="mt-6 text-sm text-gray-300 border-t border-gray-700 pt-4 space-y-2">
             <div>
               <span className="font-medium text-white">User:</span> {withdrawResult.user}
             </div>
             <div>
-              <span className="font-medium text-white">ETH Redeemed:</span> {withdrawResult.amount} ETH
+              <span className="font-medium text-white">ETH Redeemed:</span>{" "}
+              {withdrawResult.amount} ETH
             </div>
           </div>
         )}

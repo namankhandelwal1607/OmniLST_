@@ -25,8 +25,12 @@ const Stake = ({ state }) => {
       if (selectedChain === 'Arbitrum') contract = state.contractDepositManagerArbitrum;
       if (selectedChain === 'Base') contract = state.contractDepositManagerBase;
 
-      const parsedAmount = ethers.utils.parseEther(ethAmount);
-      const tx = await contract.connect(state.signer).depositETH(1, { value: parsedAmount });
+      const parsedAmount = ethers.utils.parseEther(ethAmount); // e.g., 1 ETH = 1e18 wei
+      const exchangeRate = ethers.BigNumber.from("1");         // 1 wei = 1 oLST
+      const tx = await contract.connect(state.signer).depositETH(exchangeRate, {
+        value: parsedAmount,
+      });
+
 
       await tx.wait();
       alert("Staking successful!");
@@ -61,11 +65,10 @@ const Stake = ({ state }) => {
             <button
               key={option.id}
               onClick={() => setSelectedChain(option.id)}
-              className={`px-4 py-3 rounded-lg text-sm font-medium transition ${
-                selectedChain === option.id
+              className={`px-4 py-3 rounded-lg text-sm font-medium transition ${selectedChain === option.id
                   ? 'bg-blue-600 text-white'
                   : 'text-gray-400 hover:text-white hover:bg-gray-700'
-              }`}
+                }`}
             >
               {option.id}
             </button>
@@ -119,11 +122,10 @@ const Stake = ({ state }) => {
           <button
             onClick={handleStake}
             disabled={!ethAmount || txPending}
-            className={`w-full py-4 font-semibold rounded-xl transition ${
-              ethAmount && !txPending
+            className={`w-full py-4 font-semibold rounded-xl transition ${ethAmount && !txPending
                 ? 'bg-blue-600 text-white hover:bg-blue-700'
                 : 'bg-gray-700 text-gray-400 cursor-not-allowed'
-            }`}
+              }`}
           >
             {txPending ? 'Processing...' : 'Stake ETH'}
           </button>
