@@ -9,10 +9,13 @@ interface IoLST {
 
 contract OLstBurn is ReentrancyGuard {
     IoLST public oLSTToken;
+    event Withdrawn(address indexed user, uint256 olstBurned, uint256 ethReturned);
 
     constructor(address _oLSTToken) payable {
         oLSTToken = IoLST(_oLSTToken);
     }
+
+    uint256 constant DECIMAL = 1e21;
 
     function withdrawETH(
         uint256 oLSTAmount
@@ -23,6 +26,12 @@ contract OLstBurn is ReentrancyGuard {
         oLSTToken.burnFrom(msg.sender, oLSTAmount);
 
         // 2. Return user and amount (currently same as input)
+
+        // ✅ Step 2: Send ETH back based on 1 ETH = 100 oLST (1e21 DECIMAL)
+        uint256 ethAmount = (oLSTAmount * 1e18) / DECIMAL;
+
+
+        emit Withdrawn(msg.sender, oLSTAmount, ethAmount);
         return (msg.sender, oLSTAmount);
     }
 
