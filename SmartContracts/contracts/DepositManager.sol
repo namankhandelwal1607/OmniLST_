@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+//SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -9,6 +9,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 interface IWETH is IERC20 {
     function deposit() external payable;
+
     function withdraw(uint256) external;
 }
 
@@ -30,7 +31,12 @@ contract DepositManager is Ownable, ReentrancyGuard {
     address public ccipSender;
     address public vaultController;
 
-    event Deposited(address indexed user, uint256 amount);
+    uint256 constant DECIMAL = 1e21;
+
+    event Deposited(
+        address indexed user,
+        uint256 amount
+    );
 
     constructor(
         address _router,
@@ -54,13 +60,10 @@ contract DepositManager is Ownable, ReentrancyGuard {
         nonReentrant
     {
         require(msg.value > 0, "Zero deposit");
-        require(_exchangeRate > 0, "Invalid exchange rate");
 
-        // Wrap ETH into WETH
         weth.deposit{value: msg.value}();
         IERC20(weth).safeTransfer(ccipSender, msg.value);
 
-        // Send WETH to Ethereum via CCIP
         ICCIPSender(ccipSender).sendToEthereum(
             vaultController,
             address(weth),
@@ -68,12 +71,10 @@ contract DepositManager is Ownable, ReentrancyGuard {
             msg.sender
         );
 
-        // Calculate oLST amount
-        // If _exchangeRate == 1 => 1 wei = 1 oLST
-        uint256 omniTokenToTransfer = msg.value * _exchangeRate * 1e18;
-
-        // Transfer oLST to user
+        uint256 _amount = msg.value;
+        uint256 omniTokenToTransfer = (_amount * _exchangeRate * DECIMAL)/1e18;
         Omnitoken.safeTransfer(msg.sender, omniTokenToTransfer);
+
 
         emit Deposited(msg.sender, msg.value);
     }

@@ -12,7 +12,7 @@ contract DepositManagerEthereum is Ownable, ReentrancyGuard {
     IERC20 public olstToken;
     address public ethereumVaultReceiver;
 
-    uint256 constant DECIMAL = 1e18;
+    uint256 constant DECIMAL = 1e21;
 
     event Deposited(
         address indexed user,
@@ -38,10 +38,11 @@ contract DepositManagerEthereum is Ownable, ReentrancyGuard {
         require(success, "ETH transfer to vault failed");
 
         // Calculate and transfer oLST tokens
-        uint256 olstAmount = (msg.value * _exchangeRate) ;
-        olstToken.safeTransfer(msg.sender, olstAmount);
+         uint256 _amount = msg.value;
+        uint256 omniTokenToTransfer = (_amount * _exchangeRate * DECIMAL)/1e18;
+        olstToken.safeTransfer(msg.sender, omniTokenToTransfer);
 
-        emit Deposited(msg.sender, msg.value, olstAmount);
+        emit Deposited(msg.sender, msg.value, omniTokenToTransfer);
     }
 
     receive() external payable {}
