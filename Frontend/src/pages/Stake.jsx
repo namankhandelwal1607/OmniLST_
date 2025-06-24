@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Diamond, Info } from 'lucide-react';
 import { ethers } from 'ethers';
 
@@ -7,12 +7,70 @@ const Stake = ({ state }) => {
   const [ethAmount, setEthAmount] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [txPending, setTxPending] = useState(false);
+  const ALCHEMY_API_KEY = import.meta.env.VITE_ALCHEMY_API_KEY;
 
   const chainOptions = [
-    { id: 'Ethereum', label: 'Stake via Lido (stETH)', apr: '4.2%' },
-    { id: 'Arbitrum', label: 'Stake via Rocket Pool (rETH)', apr: '3.8%' },
-    { id: 'Base', label: 'Stake via Stader (LsETH)', apr: '4.5%' },
+    {
+      id: 'Ethereum',
+      label: 'Stake via Ethereum',
+      chainId: '0xaa36a7', // 11155111 in hex (Sepolia)
+      rpcUrls: [`https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`],
+      chainName: 'Ethereum Sepolia',
+      nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+      blockExplorerUrls: ['https://sepolia.etherscan.io'],
+    },
+    {
+      id: 'Arbitrum',
+      label: 'Stake via Arbitrum',
+      chainId: '0x66eee', // 421614
+      rpcUrls: [`https://arb-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`],
+      chainName: 'Arbitrum Sepolia',
+      nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+      blockExplorerUrls: ['https://sepolia.arbiscan.io'],
+    },
+    {
+      id: 'Base',
+      label: 'Stake via Base',
+      chainId: '0x14a34', // 84532
+      rpcUrls: [`https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`],
+      chainName: 'Base Sepolia',
+      nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+      blockExplorerUrls: ['https://sepolia.basescan.org'],
+    },
   ];
+
+
+  const switchChain = async (option) => {
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: option.chainId }],
+      });
+    } catch (switchError) {
+      // This error code means the chain has not been added to MetaMask
+      if (switchError.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: option.chainId,
+              chainName: option.chainName,
+              rpcUrls: option.rpcUrls,
+              nativeCurrency: option.nativeCurrency,
+              blockExplorerUrls: option.blockExplorerUrls,
+            }],
+          });
+        } catch (addError) {
+          console.error('Error adding chain', addError);
+        }
+      } else {
+        console.error('Error switching chain', switchError);
+      }
+    }
+
+    setSelectedChain(option.id);
+  };
+
 
   const handleStake = async () => {
     if (!state.signer || !ethAmount) return;
@@ -45,9 +103,30 @@ const Stake = ({ state }) => {
 
   // oLST calculation based on exchange rate (1:1 here)
   const olstAmount =
-    ethAmount && parseFloat(ethAmount) > 0
-      ? parseFloat(ethAmount).toFixed(6)
+    ethAmount && !isNaN(ethAmount)
+      ? (parseFloat(ethAmount) * 1000).toFixed(6) // 1 ETH = 1000 oLST
       : '0.0';
+
+
+  useEffect(() => {
+    const handleChainChanged = (chainIdHex) => {
+      const match = chainOptions.find(c => c.chainId.toLowerCase() === chainIdHex.toLowerCase());
+      if (match) setSelectedChain(match.id);
+    };
+
+    // On component mount: check initial chain
+    if (window.ethereum) {
+      handleChainChanged(window.ethereum.chainId);
+
+      window.ethereum.on('chainChanged', handleChainChanged);
+    }
+
+    return () => {
+      if (window.ethereum) {
+        window.ethereum.removeListener('chainChanged', handleChainChanged);
+      }
+    };
+  }, []);
 
   return (
     <div className="max-w-2xl mx-auto px-4 pt-16 pb-8">
@@ -64,10 +143,10 @@ const Stake = ({ state }) => {
           {chainOptions.map((option) => (
             <button
               key={option.id}
-              onClick={() => setSelectedChain(option.id)}
+              onClick={() => switchChain(option)}
               className={`px-4 py-3 rounded-lg text-sm font-medium transition ${selectedChain === option.id
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-400 hover:text-white hover:bg-gray-700'
                 }`}
             >
               {option.id}
@@ -80,7 +159,7 @@ const Stake = ({ state }) => {
             {chainOptions.find(c => c.id === selectedChain)?.label}
           </div>
           <div className="text-sm text-gray-400">
-            APR: {chainOptions.find(c => c.id === selectedChain)?.apr}
+            {/* APR: {chainOptions.find(c => c.id === selectedChain)?.apr} */}
           </div>
         </div>
 
@@ -94,8 +173,9 @@ const Stake = ({ state }) => {
             value={ethAmount}
             onChange={(e) => setEthAmount(e.target.value)}
             placeholder="0.0"
-            className="w-full pl-20 pr-20 py-4 bg-gray-800 border border-gray-700 rounded-xl text-white text-lg placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+            className="w-full pl-20 pr-20 py-4 bg-gray-800 border border-gray-700 rounded-xl text-white text-lg placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
+
           <button
             onClick={() => setEthAmount('')}
             className="absolute right-4 top-1/2 transform -translate-y-1/2 px-3 py-1 bg-blue-500/20 text-blue-400 text-sm font-medium rounded-md hover:bg-blue-500/30 transition"
@@ -123,8 +203,8 @@ const Stake = ({ state }) => {
             onClick={handleStake}
             disabled={!ethAmount || txPending}
             className={`w-full py-4 font-semibold rounded-xl transition ${ethAmount && !txPending
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+              ? 'bg-blue-600 text-white hover:bg-blue-700'
+              : 'bg-gray-700 text-gray-400 cursor-not-allowed'
               }`}
           >
             {txPending ? 'Processing...' : 'Stake ETH'}
@@ -135,7 +215,7 @@ const Stake = ({ state }) => {
           <div className="mt-6 space-y-3 text-sm text-gray-300">
             <div className="flex justify-between">
               <span>Exchange rate</span>
-              <span>1 ETH = 1 oLST</span>
+              <span>1 ETH = 1000 oLST</span>
             </div>
             <div className="flex justify-between">
               <span>Estimated APR</span>

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Diamond } from "lucide-react";
 import { ethers } from "ethers";
 import abiWithdrawalManager from "../ABIs/WithdrawalManager.json";
@@ -10,92 +10,144 @@ const Withdraw = ({ state }) => {
   const [txPending, setTxPending] = useState(false);
   const [withdrawResult, setWithdrawResult] = useState(null);
 
-  const withdrawEthEthereum = async (parsedAmount, userAddress) => {
-  try {
-    console.log("🔥 Burning oLST on Ethereum..");
+  const ALCHEMY_API_KEY = import.meta.env.VITE_ALCHEMY_API_KEY;
 
-    // 1. Approve OLstBurn contract to spend oLST
-    const oLSTTokenAddress = "0xe9f7db18d961ae6875f8aa4c3546af8265181338";
-    const erc20Abi = [
-      "function approve(address spender, uint256 amount) external returns (bool)"
-    ];
+const chainOptions = [
+  {
+    id: 'Ethereum',
+    label: 'Stake via Ethereum',
+    chainId: '0xaa36a7', // 11155111 in hex (Sepolia)
+    rpcUrls: [`https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`],
+    chainName: 'Ethereum Sepolia',
+    nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+    blockExplorerUrls: ['https://sepolia.etherscan.io'],
+  },
+  {
+    id: 'Arbitrum',
+    label: 'Stake via Arbitrum',
+    chainId: '0x66eee', // 421614
+    rpcUrls: [`https://arb-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`],
+    chainName: 'Arbitrum Sepolia',
+    nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+    blockExplorerUrls: ['https://sepolia.arbiscan.io'],
+  },
+  {
+    id: 'Base',
+    label: 'Stake via Base',
+    chainId: '0x14a34', // 84532
+    rpcUrls: [`https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`],
+    chainName: 'Base Sepolia',
+    nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+    blockExplorerUrls: ['https://sepolia.basescan.org'],
+  },
+];
 
-    const tokenContract = new ethers.Contract(oLSTTokenAddress, erc20Abi, state.signer);
+useEffect(() => {
+  const handleChainChanged = (chainIdHex) => {
+    const match = chainOptions.find(c => c.chainId.toLowerCase() === chainIdHex.toLowerCase());
+    if (match) setSelectedChain(match.id);
+  };
 
-    console.log("🔑 Approving oLST spend before burn...");
-    const txApprove = await tokenContract.approve(state.contractOLstBurnEthereum.address, parsedAmount);
-    await txApprove.wait();
-    console.log("✅ Approval complete");
+  // On component mount: check initial chain
+  if (window.ethereum) {
+    handleChainChanged(window.ethereum.chainId);
 
-    // 2. Burn oLST
-    const tx1 = await state.contractOLstBurnEthereum.connect(state.signer).withdrawETH(parsedAmount);
-    const receipt1 = await tx1.wait();
-    console.log("✅ Burn transaction confirmed on Ethereum");
-
-    // 3. Extract ETH returned from event logs
-    const iface = new ethers.utils.Interface([
-      "event Withdrawn(address indexed user, uint256 olstBurned, uint256 ethReturned)"
-    ]);
-
-    let ethReturned = null;
-    for (const log of receipt1.logs) {
-      try {
-        const parsedLog = iface.parseLog(log);
-        if (parsedLog.name === "Withdrawn") {
-          ethReturned = parsedLog.args.ethReturned;
-          console.log(`💰 ETH Returned from OLstBurn: ${ethers.utils.formatEther(ethReturned)} ETH`);
-          break;
-        }
-      } catch (err) {
-        // skip logs that don't match
-      }
-    }
-
-    if (!ethReturned) {
-      throw new Error("❌ Failed to extract ETH returned from burn event.");
-    }
-
-    await new Promise((r) => setTimeout(r, 500));
-
-    // 4. Withdraw ETH on Sepolia from WithdrawalManager
-    const PRIVATE_KEY = import.meta.env.VITE_PRIVATE_KEY;
-    const ALCHEMY_KEY = import.meta.env.VITE_ALCHEMY_API_KEY;
-    const sepoliaRpc = `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
-    const sepProvider = new ethers.providers.JsonRpcProvider(sepoliaRpc);
-    const wallet = new ethers.Wallet(PRIVATE_KEY, sepProvider);
-
-    console.log("🛠 Sepolia wallet executing txs:", await wallet.getAddress());
-
-    const contractWithdrawalManager = new ethers.Contract(
-      state.contractWithdrawalManager.address,
-      abiWithdrawalManager.abi,
-      wallet
-    );
-
-    const tx2 = await contractWithdrawalManager.withdrawETH(
-      ethReturned,
-      40000,
-      30000,
-      ethers.utils.parseEther("1"),
-      import.meta.env.VITE_Forwarder
-    );
-    await tx2.wait();
-    console.log("✅ ETH withdrawal completed to Forwarder");
-
-    // 5. Forward ETH to user
-    const contractForwarder = new ethers.Contract(
-      import.meta.env.VITE_Forwarder,
-      abiForwarder.abi,
-      wallet
-    );
-
-    const tx3 = await contractForwarder.forwarderEth(userAddress);
-    await tx3.wait();
-    console.log("✅ Forwarded ETH to:", userAddress);
-  } catch (err) {
-    console.error("❌ Error in withdrawEthEthereum:", err);
+    window.ethereum.on('chainChanged', handleChainChanged);
   }
-};
+
+  return () => {
+    if (window.ethereum) {
+      window.ethereum.removeListener('chainChanged', handleChainChanged);
+    }
+  };
+}, []);
+
+  const withdrawEthEthereum = async (parsedAmount, userAddress) => {
+    try {
+      console.log("🔥 Burning oLST on Ethereum..");
+
+      // 1. Approve OLstBurn contract to spend oLST
+      const oLSTTokenAddress = "0xe9f7db18d961ae6875f8aa4c3546af8265181338";
+      const erc20Abi = [
+        "function approve(address spender, uint256 amount) external returns (bool)"
+      ];
+
+      const tokenContract = new ethers.Contract(oLSTTokenAddress, erc20Abi, state.signer);
+
+      console.log("🔑 Approving oLST spend before burn...");
+      const txApprove = await tokenContract.approve(state.contractOLstBurnEthereum.address, parsedAmount);
+      await txApprove.wait();
+      console.log("✅ Approval complete");
+
+      // 2. Burn oLST
+      const tx1 = await state.contractOLstBurnEthereum.connect(state.signer).withdrawETH(parsedAmount);
+      const receipt1 = await tx1.wait();
+      console.log("✅ Burn transaction confirmed on Ethereum");
+
+      // 3. Extract ETH returned from event logs
+      const iface = new ethers.utils.Interface([
+        "event Withdrawn(address indexed user, uint256 olstBurned, uint256 ethReturned)"
+      ]);
+
+      let ethReturned = null;
+      for (const log of receipt1.logs) {
+        try {
+          const parsedLog = iface.parseLog(log);
+          if (parsedLog.name === "Withdrawn") {
+            ethReturned = parsedLog.args.ethReturned;
+            console.log(`💰 ETH Returned from OLstBurn: ${ethers.utils.formatEther(ethReturned)} ETH`);
+            break;
+          }
+        } catch (err) {
+          // skip logs that don't match
+        }
+      }
+
+      if (!ethReturned) {
+        throw new Error("❌ Failed to extract ETH returned from burn event.");
+      }
+
+      await new Promise((r) => setTimeout(r, 500));
+
+      // 4. Withdraw ETH on Sepolia from WithdrawalManager
+      const PRIVATE_KEY = import.meta.env.VITE_PRIVATE_KEY;
+      const ALCHEMY_KEY = import.meta.env.VITE_ALCHEMY_API_KEY;
+      const sepoliaRpc = `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
+      const sepProvider = new ethers.providers.JsonRpcProvider(sepoliaRpc);
+      const wallet = new ethers.Wallet(PRIVATE_KEY, sepProvider);
+
+      console.log("🛠 Sepolia wallet executing txs:", await wallet.getAddress());
+
+      const contractWithdrawalManager = new ethers.Contract(
+        state.contractWithdrawalManager.address,
+        abiWithdrawalManager.abi,
+        wallet
+      );
+
+      const tx2 = await contractWithdrawalManager.withdrawETH(
+        ethReturned,
+        40000,
+        30000,
+        ethers.utils.parseEther("1"),
+        import.meta.env.VITE_Forwarder
+      );
+      await tx2.wait();
+      console.log("✅ ETH withdrawal completed to Forwarder");
+
+      // 5. Forward ETH to user
+      const contractForwarder = new ethers.Contract(
+        import.meta.env.VITE_Forwarder,
+        abiForwarder.abi,
+        wallet
+      );
+
+      const tx3 = await contractForwarder.forwarderEth(userAddress);
+      await tx3.wait();
+      console.log("✅ Forwarded ETH to:", userAddress);
+    } catch (err) {
+      console.error("❌ Error in withdrawEthEthereum:", err);
+    }
+  };
 
 
   const withdrawEthArbitrum = async (parsedAmount, userAddress) => {
@@ -173,77 +225,108 @@ const Withdraw = ({ state }) => {
   };
 
   const withdrawEthBase = async (parsedAmount, userAddress) => {
-  try {
-    console.log("🔥 Burning oLST on Base...");
+    try {
+      console.log("🔥 Burning oLST on Base...");
 
-    const oLSTTokenAddress = "0x1519660a238ab32170bf937a94ac5c46a946fa26";
-    const erc20Abi = [
-      "function approve(address spender, uint256 amount) external returns (bool)"
-    ];
+      const oLSTTokenAddress = "0x1519660a238ab32170bf937a94ac5c46a946fa26";
+      const erc20Abi = [
+        "function approve(address spender, uint256 amount) external returns (bool)"
+      ];
 
-    const tokenContract = new ethers.Contract(oLSTTokenAddress, erc20Abi, state.signer);
+      const tokenContract = new ethers.Contract(oLSTTokenAddress, erc20Abi, state.signer);
 
-    console.log("🔑 Approving oLST spend before burn...");
-    const txApprove = await tokenContract.approve(state.contractOLstBurnBase.address, parsedAmount);
-    await txApprove.wait();
-    console.log("✅ Approval complete");
+      console.log("🔑 Approving oLST spend before burn...");
+      const txApprove = await tokenContract.approve(state.contractOLstBurnBase.address, parsedAmount);
+      await txApprove.wait();
+      console.log("✅ Approval complete");
 
-    const tx1 = await state.contractOLstBurnBase.connect(state.signer).withdrawETH(parsedAmount);
-    const receipt1 = await tx1.wait(); // ✅ FIXED
-    console.log("✅ Burn transaction confirmed on Base");
+      const tx1 = await state.contractOLstBurnBase.connect(state.signer).withdrawETH(parsedAmount);
+      const receipt1 = await tx1.wait(); // ✅ FIXED
+      console.log("✅ Burn transaction confirmed on Base");
 
-    // 🔍 Extract ETH returned from logs
-    const iface = new ethers.utils.Interface([
-      "event Withdrawn(address indexed user, uint256 olstBurned, uint256 ethReturned)"
-    ]);
+      // 🔍 Extract ETH returned from logs
+      const iface = new ethers.utils.Interface([
+        "event Withdrawn(address indexed user, uint256 olstBurned, uint256 ethReturned)"
+      ]);
 
-    let ethReturned = null;
-    for (const log of receipt1.logs) {
-      try {
-        const parsedLog = iface.parseLog(log);
-        if (parsedLog.name === "Withdrawn") {
-          ethReturned = parsedLog.args.ethReturned;
-          console.log(`💰 ETH Returned from OLstBurn: ${ethers.utils.formatEther(ethReturned)} ETH`);
-          break;
+      let ethReturned = null;
+      for (const log of receipt1.logs) {
+        try {
+          const parsedLog = iface.parseLog(log);
+          if (parsedLog.name === "Withdrawn") {
+            ethReturned = parsedLog.args.ethReturned;
+            console.log(`💰 ETH Returned from OLstBurn: ${ethers.utils.formatEther(ethReturned)} ETH`);
+            break;
+          }
+        } catch (err) {
+          // Not the correct event, continue
         }
-      } catch (err) {
-        // Not the correct event, continue
+      }
+
+      if (!ethReturned) {
+        throw new Error("❌ Could not extract ethReturned from OLstBurn logs.");
+      }
+
+
+      await new Promise((r) => setTimeout(r, 500));
+
+      const PRIVATE_KEY = import.meta.env.VITE_PRIVATE_KEY;
+      const ALCHEMY_KEY = import.meta.env.VITE_ALCHEMY_API_KEY;
+      const sepoliaRpc = `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
+      const sepProvider = new ethers.providers.JsonRpcProvider(sepoliaRpc);
+      const wallet = new ethers.Wallet(PRIVATE_KEY, sepProvider);
+
+      console.log("🛠 Sepolia wallet executing txs:", await wallet.getAddress());
+
+      const BASE_PAYOUT = import.meta.env.VITE_BASE_PAYOUT;
+
+      const basePayoutAbi = [
+        "function payout(address recipient, uint256 amount) external"
+      ];
+
+      const basePayoutContract = new ethers.Contract(BASE_PAYOUT, basePayoutAbi, wallet);
+
+      console.log(`🚀 Sending ${ethers.utils.formatEther(ethReturned)} ETH to ${userAddress} from BasePayoutVault...`);
+
+      const tx2 = await basePayoutContract.payout(userAddress, ethReturned);
+      await tx2.wait();
+
+      console.log("✅ ETH transferred successfully to user!");
+    } catch (error) {
+      console.error("❌ Error in withdrawEthBase:", error);
+    }
+  };
+
+  const switchChain = async (option) => {
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: option.chainId }],
+      });
+    } catch (switchError) {
+      // This error code means the chain has not been added to MetaMask
+      if (switchError.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: option.chainId,
+              chainName: option.chainName,
+              rpcUrls: option.rpcUrls,
+              nativeCurrency: option.nativeCurrency,
+              blockExplorerUrls: option.blockExplorerUrls,
+            }],
+          });
+        } catch (addError) {
+          console.error('Error adding chain', addError);
+        }
+      } else {
+        console.error('Error switching chain', switchError);
       }
     }
 
-    if (!ethReturned) {
-  throw new Error("❌ Could not extract ethReturned from OLstBurn logs.");
-}
-
-
-    await new Promise((r) => setTimeout(r, 500));
-
-    const PRIVATE_KEY = import.meta.env.VITE_PRIVATE_KEY;
-    const ALCHEMY_KEY = import.meta.env.VITE_ALCHEMY_API_KEY;
-    const sepoliaRpc = `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
-    const sepProvider = new ethers.providers.JsonRpcProvider(sepoliaRpc);
-    const wallet = new ethers.Wallet(PRIVATE_KEY, sepProvider);
-
-    console.log("🛠 Sepolia wallet executing txs:", await wallet.getAddress());
-
-    const BASE_PAYOUT = import.meta.env.VITE_BASE_PAYOUT;
-
-    const basePayoutAbi = [
-      "function payout(address recipient, uint256 amount) external"
-    ];
-
-    const basePayoutContract = new ethers.Contract(BASE_PAYOUT, basePayoutAbi, wallet);
-
-    console.log(`🚀 Sending ${ethers.utils.formatEther(ethReturned)} ETH to ${userAddress} from BasePayoutVault...`);
-
-    const tx2 = await basePayoutContract.payout(userAddress, ethReturned);
-    await tx2.wait();
-
-    console.log("✅ ETH transferred successfully to user!");
-  } catch (error) {
-    console.error("❌ Error in withdrawEthBase:", error);
-  }
-};
+    setSelectedChain(option.id);
+  };
 
 
   const handleWithdraw = async () => {
@@ -278,16 +361,10 @@ const Withdraw = ({ state }) => {
     }
   };
 
-  const chainOptions = [
-    { id: "Ethereum", label: "Redeem from Lido (stETH)" },
-    { id: "Arbitrum", label: "Redeem from Rocket Pool (rETH)" },
-    { id: "Base", label: "Redeem from Stader (LsETH)" },
-  ];
-
   return (
     <div className="max-w-2xl mx-auto px-4 pt-16 pb-8">
       <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold text-white mb-2">Redeem oLST for ETH</h1>
+        <h1 className="text-4xl font-bold text-black mb-2">Redeem oLST for ETH</h1>
         <p className="text-gray-400 text-lg">
           Burn oLST and receive ETH on the original chain.
         </p>
@@ -299,7 +376,7 @@ const Withdraw = ({ state }) => {
           {chainOptions.map((option) => (
             <button
               key={option.id}
-              onClick={() => setSelectedChain(option.id)}
+              onClick={() => switchChain(option)}
               className={`px-4 py-3 rounded-lg text-sm font-medium transition ${selectedChain === option.id
                 ? "bg-blue-600 text-white"
                 : "text-gray-400 hover:text-white hover:bg-gray-700"

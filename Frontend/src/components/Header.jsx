@@ -43,14 +43,14 @@ export const Header = () => {
         <span className="text-2xl font-bold text-black tracking-wide">oLST</span>
       </Link>
 
-      <nav className="hidden md:flex items-center space-x-8">
+      {/* <nav className="hidden md:flex items-center space-x-8">
         <a href="#" className="text-gray-700 hover:text-black transition-colors font-medium">Staking</a>
         <a href="#" className="text-gray-700 hover:text-black transition-colors font-medium">Integrations</a>
         <a href="#" className="text-gray-700 hover:text-black transition-colors font-medium">Node Operators</a>
         <a href="#" className="text-gray-700 hover:text-black transition-colors font-medium">Lido DAO</a>
         <a href="#" className="text-gray-700 hover:text-black transition-colors font-medium">Developers</a>
         <a href="#" className="text-gray-700 hover:text-black transition-colors font-medium">Learn</a>
-      </nav>
+      </nav> */}
 
       {location.pathname === '/stake' || location.pathname === '/withdraw' ? (
         <div className="flex items-center space-x-4">
